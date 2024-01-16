@@ -1,0 +1,87 @@
+set verbose off
+set seed 123
+
+# set workdir "..."
+set max_verbose off
+include functions.inp
+
+############################# main ####################################
+
+open elezioni_camera_2018_comuni.csv
+
+# define vote proportions (v)
+series NON_VOTO = ELETTORI - TOTALE
+series ALTRI = LOCALI + ALTRI
+list parties = LEGA FI FDI PD M5S ALTRI NON_VOTO
+V = v_prop(parties, ELETTORI)
+
+# define log ratios (Y)
+Y = log_ratio(V)
+
+# rename Y variables and drop last y-variable
+rename y_v_LEGA y_LEGA
+rename y_v_FI y_FI
+rename y_v_FDI y_FDI
+rename y_v_PD y_PD
+rename y_v_M5S y_M5S
+rename y_v_ALTRI y_ALTRI
+#delete y_v_NON_VOTO
+
+# join covariates
+join popolazione_2013_2018_0101.csv popolazione2018 stranieri2018  --ikey=CODICE_ISTAT --aggr=sum
+join redditi_irpef_2013_2018_0101.csv n_contribuenti17 \
+  red_lavdip_q17 red_lavdip_eur17 \ 
+  red_pens_q17 red_compl_75_120m_q17 \
+  red_compl_piu120_q17 red_compl_0_10m_q17 --ikey=CODICE_ISTAT --aggr=sum
+join censimento_istruzione_terziaria_1821.csv ist3_18 ist3_21 --ikey=CODICE_ISTAT --aggr=sum
+join censimento_anziani_18_21.csv over60_18 --ikey=CODICE_ISTAT --aggr=sum
+join censimento_lavoro_18_21.csv tdis18 --ikey=CODICE_ISTAT --aggr=sum
+join territorio_comuni2018.csv superficie zona_altimetrica litoraneo isolano costiero altitudine grado_urbanizzazione --ikey=CODICE_ISTAT --aggr=sum  
+
+# define covariates
+maschi = VOTANTI_MASCHI/VOTANTI
+stranieri = stranieri2018 / popolazione2018
+red_lavdip_m = red_lavdip_eur17 / red_lavdip_q17 
+benes = (red_compl_75_120m_q17 + red_compl_piu120_q17) / popolazione2018
+pov = red_compl_0_10m_q17 / n_contribuenti17
+lp = log(popolazione2018)
+ly = log(red_lavdip_m)
+lp2 = lp^2
+
+Z = dummify(ZONA_GEOGRAFICA)
+rename DZONA_GEOGRAFICA_2 nord_ovest
+rename DZONA_GEOGRAFICA_3 centro
+rename DZONA_GEOGRAFICA_4 isole
+rename DZONA_GEOGRAFICA_5 sud
+T = dummify(grado_urbanizzazione)
+rename Dgrado_urbanizzazione_2 borgo
+rename Dgrado_urbanizzazione_3 rurale
+dummify zona_altimetrica --drop-last
+rename Dzona_altimetrica_1 montagna_int
+rename Dzona_altimetrica_2 montagna_lito
+rename Dzona_altimetrica_3 collina_int
+rename Dzona_altimetrica_4 collina_lito
+series m = montagna_int + montagna_lito
+
+## List of covariates
+list X = const maschi stranieri ly lp lp2 over60_18 ist3_18 tdis18 Z T m costiero 
+
+ESTIMATE = 0
+
+if ESTIMATE
+    # estimate the model
+    set lbfgs off
+    mod = KKmodel(Y, X, _(verbose=1))
+    bwrite(mod, "mod2018.xml")
+else
+    mod = bread("mod2018.xml")
+endif
+
+# counterfactual analysis
+#strings city = defarray("Roma", "Milano", "Venezia", "Alba", "Ancona", "Loreto", "Cagliari", "Vasto")
+#tdis_cdiff = causal_difference(city, COMUNE, mod, X, Y, 9, 0.05, 1000)	# tasso disoccupazione +5%
+#ly_cdiff = causal_difference(city, COMUNE, mod, X, Y, 4, 0.05, 500)		# log(reddito medio lavoratore dipendente) + 
+#over60_cdiff = causal_difference(city, COMUNE, mod, X, Y, 7, -0.05, 1000)	# over60 +5%
+#str_cdiff = causal_difference(city, COMUNE, mod, X, Y, 3, 0.05, 1000)	# stranieri +5%
+#ist3_cdiff = causal_difference(city, COMUNE, mod, X, Y, 8, 0.05, 1000)	# laureati +5%
+

@@ -1,0 +1,455 @@
+function list v_prop(list ind_var, series total)
+    /* creation of series for vote proportions,
+    given a list of variables for votes of each party (ind_var - numerator) 
+    and the total number of votes in a city (total - denominator). */
+    
+    list V = {}
+    loop foreach i ind_var
+        series v_$i = ind_var.$i / total
+        V += v_$i
+    endloop
+    return V
+end function
+
+
+
+function list log_ratio(list V)
+    /* creation of series for log ratios of vote proportions:
+    input should be a list of "k"-vote proportions,
+    output will be a list of "k-1"-log ratios -> ln(V_i/V_k), i=1,...,k-1 */
+    
+    scalar idx = nelem(V)
+    series last = V[idx]		# last series used as reference (denominator)
+    list Y = {}
+    loop foreach i V
+        series y_$i = log(V.$i) - log(last)
+        Y += y_$i
+    endloop
+    return Y[-idx]
+end function
+
+
+
+function matrix m_log_transf(matrix Y)
+    /* convert log ratios in vote proportions (inverse of log_ratio( ))
+    input should be a "n"x"k-1" matrix for the log_ratios,
+    output will be a "n"x"k" matrix of vote proportions. */
+    
+    matrix v = zeros(rows(Y))
+    loop i=1..cols(Y)
+        matrix v_$i = exp(Y[,i]) ./ (1 + sumr(exp(Y)))
+        matrix v = v ~ v_$i
+    endloop
+    matrix v_last = 1 - sumr(v)
+    matrix v = v[,2:] ~ v_last
+    return v
+end function
+
+
+
+function matrix mvtgen(scalar n, const matrix Sigma, scalar df)
+    /* generation of k - multivariate Student t r.v. ("n"x"k" matrix), 
+    given a specific variance-covariance matrix (Sigma) and number of degrees of freedom (df). */
+    
+    k = cols(Sigma)
+    matrix X = mnormal(n, k) * cholesky(Sigma)'
+    matrix u = mrandgen(x, df, n, 1)
+    return X .* sqrt(df ./ u)
+end function
+
+
+function matrix vote_pred(bundle mod, matrix x, scalar n)
+    /* prediction of Y (mvt distributed) from estimated parameters
+    given a specific model (mod), choosing covariates (x) and iterations (n) */ 
+
+    # 1) store estimated parameters
+    theta = mod.mle.coeff
+    vcv = mod.mle.vcv
+    stderr = mod.mle.stderr
+    ncoeff = mod.mle.ncoeff
+    
+    # define fixed elements
+    scalar k = nelem(mod.X)
+    scalar w = nelem(mod.Y)
+    scalar b = k * w
+    scalar idx = ncoeff
+    scalar p = rows(x)
+    #strings v_names = varnames(mod.Y)
+    #v_names += "y_NONVOTO"
+    # scalar q = cols(x) for const case
+    # strings vars = array() to append @sname
+    
+    
+    # repeat simulation "n" times
+    loop n --progressive
+        
+        # 2) random draw of parameters
+        matrix theta_hat = mrandgen(N, theta, stderr, ncoeff, 1) #88x1
+    
+	    # 3) random draw of Y ~ mvt distributed
+	    matrix beta = mshape(theta_hat[1:b],k, w) #11x6
+	    scalar df = round(theta_hat[idx]) #scalar
+	    matrix mu = x*beta #1x11 * 11x6 = 1x6
+	    matrix u = mrandgen(x, df, p, 1) #1x1
+	    matrix y_pred = mu .* sqrt(df ./ u) #1x6
+        matrix v_pred = m_log_transf(y_pred)
+        loop j=1..cols(v_pred)
+            sname = sprintf("v_pred_%d", j)
+            scalar @sname = v_pred[j]
+            # vars += @sname
+        endloop
+        # store kk_prediction.gdt  v_pred_LEGA v_pred_FI v_pred_FDI v_pred_PD v_pred_M5S v_pred_AZIV v_pred_ALTRI v_pred_NONVOTO
+    endloop
+    
+    return v_pred
+end function
+
+
+function bundle E_vote(bundle mod, matrix x, scalar m)
+    /* Simulate the expected vote in a district, given a specific model (mod),
+      a set of regressors (reg) and iterations (m).
+      Return summary statistics. */
+      
+    # 1) store estimated parameters
+    theta = mod.mle.coeff
+    vcv = mod.mle.vcv
+    stderr = mod.mle.stderr
+    ncoeff = mod.mle.ncoeff
+    
+    # define fixed elements
+    scalar k = nelem(mod.X)
+    scalar idx = ncoeff
+    scalar p = rows(x)
+    scalar n = 500
+    scalar r = nelem(mod.Y)+1
+    strings v_names = varnames(mod.Y)
+    v_names += "y_NONVOTO"
+    # strings vars = array() to append @sname
+    matrix e_vote = ones(nelem(v_names))'
+    # 2) repeat prediction m-times and calculate the average
+    loop i=1..m 
+       if (i%10) == 0
+            printf "%5d/%5d\r", i, m
+            flush
+        endif
+        v_pred = vote_pred(mod, x, n)
+        exp_vote = meanc(v_pred)[-r]
+        last_e_vote = 1 - sumr(exp_vote)
+        exp_vote = exp_vote ~ last_e_vote
+        loop j=1..nelem(v_names)
+            sname = sprintf("E_vote_%s",v_names[j][3:])
+            scalar @sname = exp_vote[j]
+            # vars += @sname
+        endloop
+        e_vote = e_vote | exp_vote
+        #print E_vote_LEGA E_vote_FI E_vote_FDI E_vote_PD E_vote_M5S E_vote_ALTRI E_vote_NONVOTO
+        #store kk_expvote.gdt  E_vote_LEGA E_vote_FI E_vote_FDI E_vote_PD E_vote_M5S E_vote_AZIV E_vote_ALTRI E_vote_NONVOTO
+    endloop
+    
+    e_vote = e_vote[-1,]
+    bundle E_vote = null
+    E_vote.sim = e_vote
+    E_vote.smean = meanc(e_vote) #Mean = point estimate of the Expected vote
+    E_vote.sdev = sdc(e_vote)    #Std.Dev = standard error of the Expected vote
+    E_vote.ci05 = quantile(e_vote, 0.05)
+    E_vote.ci95 = quantile(e_vote, 0.95)
+    
+    return E_vote
+end function
+
+
+function bundle Exp_vote(bundle mod, matrix X, scalar m)
+
+    if 1
+        bundle ret = defbundle()
+        return ret
+    endif
+
+     /* Simulate the expected vote for all district, given a specific model (mod),
+      a matrix with regressors (suggest: X = {mod.X}, eventually adding some modifications,
+      like X1 = X and X1[,1] = X1[,1] + 1) and iterations (m). */
+    
+    n = rows(X)
+    bundle Exp_vote = null
+    Exp_vote.smean = ones(1, 7)
+    Exp_vote.sdev = ones(1, 7)
+    Exp_vote.ci05 = ones(1, 7)
+    Exp_vote.ci95 = ones(1, 7)
+    
+    loop i=1..n
+        vote = E_vote(mod, X[i,], m)
+        smean = vote.smean
+        sdev = vote.sdev
+        ci05 = vote.ci05
+        ci95 = vote.ci95
+        Exp_vote.smean = Exp_vote.smean | smean
+        Exp_vote.sdev = Exp_vote.sdev | sdev
+        Exp_vote.ci05 = Exp_vote.ci05 | ci05
+        Exp_vote.ci95 = Exp_vote.ci95 | ci95
+    endloop
+    
+    Exp_vote.smean = Exp_vote.smean[-1,]
+    Exp_vote.sdev = Exp_vote.sdev[-1,]
+    Exp_vote.ci05 = Exp_vote.ci05[-1,]
+    Exp_vote.ci95 = Exp_vote.ci95[-1,]
+
+    return Exp_vote
+end function
+
+
+function matrix mvtldens(const matrix X, const matrix Sigma, scalar df)
+    # calculation of the log-densities for multivariate Student t
+    k = cols(X)
+    T = rows(X)
+    hk = k/2
+    hdf = df/2
+    scalar fixed = lngamma(hk + hdf) - lngamma(hdf) - hk * log($pi * df)
+    matrix S = Sigma .* df / (df - 2)
+    scalar ld = ldet(S)
+    # condition to check if S is pd matrix
+    if missing(ld)
+        return mshape(NA, T, 1)
+    endif
+    fixed -= 0.5*ld
+    iS = invpd(S) / df
+    Z = X*iS
+    ret = 1 + sumr(Z .* X) # sumr(X*iS .* X) equal to sandwich formula (x'iSx)
+    flush
+    return fixed - (hk + hdf) .* log(ret)
+end function
+
+
+function matrix kkmvtldens(const matrix X, const matrix S, scalar df)
+    /* calculation of the log-densities for multivariate Student t 
+       only for fully contested case (KK-like) */
+    p = cols(X)
+    llk = lngamma((df+p)/2) - lngamma(df/2) - (p/2)*log(df) - (p/2)*log($pi) \
+    - (1/2)*log(det(S)) - ((df+p)/2)*log(1 + (diag(X*inv(S)*X')./df))
+    flush
+    return llk
+end function
+
+
+function bundle mvtreg(list Y, list X, scalar verbose)
+    # multivariate t regression using mle
+    smpl Y X --no-missing
+    mY = {Y}
+    mX = {X}
+    T = rows(mY)
+    h = cols(mY)
+    k = cols(mX)
+    E = {}
+
+    # initialize parameters
+    B = mols(mY, mX, &E) #&E to give a reference
+    S = mcov(E)
+    C = cholesky(S)
+    U = E / C'
+    kurt = meanc(vec(U) .^ 4) - 3 # excess of kurtosis to determine df (if df > 4)
+    v = 4 + 6/kurt
+    b = vec(B)
+    c = vech(C)
+    
+    # for a better output
+    strings par_names = array(0)
+    loop foreach i Y
+        Y_name = varnames(Y)[i]
+        loop foreach j X
+            X_name = varnames(X)[j]
+            par_names += sprintf("%s/%s", Y_name, X_name) # (1°) bhat_names
+        endloop
+    endloop
+
+    sol = nelem(Y)
+    loop i=1..sol
+        row = i
+        loop j=1..row
+            col = j
+            par_names += sprintf("c[%d,%d]", row, col) # (2°) mcov_names
+        endloop
+    endloop
+
+    par_names += "v" # (3°) dof_name
+    
+    # to decide the verbosity of the output
+    if verbose == 0
+        optstr = "--quiet"
+    elif verbose == 2
+        optstr = "--verbose"
+    else
+        optstr = ""
+    endif
+
+
+    mle llik = mvtldens(E, Shat, v)
+        E = mY - mX * mshape(b, k, h)
+        C = lower(unvech(c))
+        Shat = C*C'
+        params b c v
+        param_names par_names
+    end mle @optstr
+
+    ret = $model
+    return ret
+end function
+
+function bundle default_opts(void)
+    bundle ret = null
+    ret.verbose = 1
+    return ret
+end function
+
+function void KK_printout(bundle mod)
+    Ynames = varnames(mod.Y)
+    Xnames = varnames(mod.X)
+    n = nelem(mod.Y)
+    k = nelem(mod.X)
+
+    fin = 0
+    loop i = 1 .. n
+        ini = fin+1
+        fin = ini+k-1
+        printf "============================================================================\n"
+        printf "%s\n", Ynames[i]
+        printf "============================================================================\n"
+        coef = mod.mle.coeff[ini:fin]
+        v = mod.mle.vcv[ini:fin, ini:fin]
+        cs = coef ~ sqrt(diag(v))
+        modprint cs Xnames
+        printf "\n"
+    endloop
+
+    ini = fin+1
+    fin = ini + n*(n+1)/2 - 1
+    c = mod.mle.coeff[ini:fin]
+    C = lower(unvech(c))
+    S = C*C'
+    df = mod.mle.coeff[fin+1]
+    Shat = S .* df ./ (df - 2)
+    printf "Estimated covariance matrix:\n\n%11.5f\n", Shat
+    s = sqrt(diag(Shat))
+    printf "Implied correlation matrix:\n\n%11.5f\n", Shat ./ (s*s')
+
+end function
+
+
+function bundle KKmodel(list Y, list X, bundle Opts[null])
+
+    opts = default_opts()
+    if exists(Opts)
+        opts = Opts + opts
+    endif
+
+    bundle ret = defbundle("Y", Y, "X", X, "options", opts)
+    
+    ret.mle = mvtreg(Y, X, opts.verbose)
+
+    if opts.verbose > 0
+        KK_printout(ret)
+    endif
+
+    return ret
+
+end function
+
+function bundle causal_input(strings name, series smpl_filter, list X, list Y, scalar k, scalar delta)
+    # function to extract real data (covariates "x", log_ratio "y" and vote proportions "v")
+    # for a given set of towns (defined as "strings name = defarray("Roma", "Milano", ...)),
+    # a list of covariates + log_ratio (suggest: use the same adopted to estimate KK model)
+    # and a series to filter.
+    # Scalar "k" defines the index of the covariate to modify; scalar "delta" is the variation.
+    
+    n = nelem(name)
+    bundle c_input = null
+    matrix c_input.x = zeros(1, nelem(X)) # nelem(X) - 1 to delete the constant (otherwise use nelem(X))
+    matrix c_input.y = zeros(1, nelem(Y))
+    matrix c_input.v = zeros(1, nelem(Y)+1) # nelem(Y) + 1 to include the reference class
+    
+    loop i=1..n
+        smpl smpl_filter == name[i] --restrict
+        x = {X}
+        y = {Y}
+        v = m_log_transf(y)
+        c_input.x = c_input.x | x
+        c_input.y = c_input.y | y
+        c_input.v = c_input.v | v
+        smpl --full
+    endloop
+    
+    matrix c_input.xd = c_input.x
+    c_input.xd[,k] += delta
+    
+    c_input.x = c_input.x[-1,]
+    c_input.xd = c_input.xd[-1,]
+    c_input.y = c_input.y[-1,]
+    c_input.v = c_input.v[-1,]
+    
+    return c_input
+   
+end function
+
+function bundle causal_difference(strings name, series smpl_filter, bundle mod, list X, list Y, scalar k, scalar delta, scalar m)
+    # function to calculate the causal difference between the expected vote and a new expected vote.
+    # "name", "smpl_filter", "X", "Y", "k", "delta" are the same input of "causal_input()";
+    # "mod" is KKmodel and "m" is the number of M.C. simulations executed by "E_vote()" function.
+    
+    input = causal_input(name, smpl_filter, X, Y, k, delta)
+    n = nelem(name)
+    bundle c_diff = null
+    matrix c_diff.vote = input.v
+    matrix c_diff.exp_vote = zeros(1, nelem(Y) + 1)   # nelem(Y) + 1 to include the reference class
+    matrix c_diff.new_exp_vote = zeros(1, nelem(Y) + 1)
+    r = rows(c_diff.vote)
+    pnames = varnames(mod.Y)
+    pnames += defarray("  NON VOTO")
+    
+    printf "Waiting for counterfactual simulations in %s (%g) \n\n", varname(X[k]), delta
+    loop i=1..r
+        printf "- %s:\n", name[i]
+        print "(1/2)"
+        exp_vote = E_vote(mod, input.x[i,], m)
+        print "(2/2)"
+        new_exp_vote = E_vote(mod, input.xd[i,], m)
+        c_diff.exp_vote = c_diff.exp_vote | exp_vote.smean
+        c_diff.new_exp_vote = c_diff.new_exp_vote | new_exp_vote.smean
+        printf "Well done! \n\n"
+    endloop  
+    
+    c_diff.exp_vote = c_diff.exp_vote[-1,]
+    c_diff.new_exp_vote = c_diff.new_exp_vote[-1,]    
+    matrix c_diff.vote_error = c_diff.vote - c_diff.exp_vote
+    matrix c_diff.causal_difference = c_diff.new_exp_vote - c_diff.exp_vote
+    matrix c_diff.mvote = meanc(c_diff.vote)
+    matrix c_diff.mexp_vote = meanc(c_diff.exp_vote)
+    matrix c_diff.mnew_exp_vote = meanc(c_diff.new_exp_vote)
+    matrix c_diff.mcausal_difference = c_diff.mnew_exp_vote - c_diff.mexp_vote
+
+    strings pnames = varnames(mod.Y)
+    string pline = "                             "
+    loop i = 1 .. nelem(pnames)
+        pline = pline ~ sprintf("%11s", pnames[i][3:])
+    endloop
+    pline = pline ~ "   NON VOTO"
+
+    printf "\n\n------ VOTE PREDICTION ----\n\n"
+    printf " Number of simulations: %g\n\n", m
+    loop i=1..n
+        printf "----------------------------------------------------------------------------------------------------------------------\n\n"
+        printf " VOTE PREDICTION FOR [%s]\n", name[i]
+        printf "%s\n\n", pline
+        printf " Real vote (in %%):           %11.4f\n", c_diff.vote[i,] *100
+        printf " Expected vote (in %%):       %11.4f\n", c_diff.exp_vote[i,] *100
+        printf " Error in prediction (in %%): %11.4f\n\n", c_diff.exp_vote[i,]*100 - c_diff.vote[i,]*100
+        if varname(X[k]) == "ly" 
+            printf "  Simulate variation in '%s':\n    - Real: %g€\n   - Variation: %g€\t\t(other covariates being equal)\n    - Simulation: %g€\n\n", varname(X[k]), round(exp(input.x[i,k])), round(exp(input.xd[i,k])-exp(input.x[i,k])), round(exp(input.xd[i,k]))
+        else
+            printf "  Simulate variation in '%s':\n    - Real: %g\n    - Variation: %g\t\t(other covariates being equal)\n    - Simulation: %g\n\n", varname(X[k]), input.x[i,k], delta, input.xd[i,k]
+        endif    
+        printf " New expected vote (in %%):   %11.4f\n", c_diff.new_exp_vote[i,]*100
+        printf " Causal effect (in %%):       %11.4f\n", c_diff.causal_difference[i,]*100
+    endloop
+
+    return c_diff
+
+end function
+
