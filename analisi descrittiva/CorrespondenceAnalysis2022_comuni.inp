@@ -1,0 +1,26 @@
+set verbose off
+include corresp.gfn
+
+open elezioni_camera_2022_comuni.csv --quiet
+series NULLE = VOTANTI - SCHEDE_BIANCHE - TOTALE
+series NONVOTO = ELETTORI - VOTANTI + NULLE + SCHEDE_BIANCHE
+series CDX = FI + FDI + LEGA
+list X = CDX PD AZIV M5S LOCALI ALTRI NONVOTO
+smpl REGIONE != "Valle d'Aosta/Valle d'Aoste" --restrict
+
+matrix CT = aggregate(X, REGIONE, sum)
+M = CT[1:19, 3:]
+
+# per togliere etichetta Valle d'Aosta (indice 16 in REGIONE)
+reg_label = strvals(REGIONE)
+
+bundle b = ca_matrix(M)
+b.rlabels = reg_label
+b.clabels = varnames(X)
+b.rfsize = 8
+ca_printout(&b)
+ca_plot(&b, 2, 3)
+
+
+
+

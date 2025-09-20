@@ -1,0 +1,22 @@
+set verbose off
+include corresp.gfn
+
+open elezioni_camera_2018_comuni.csv --quiet
+series NULLE = VOTANTI - SCHEDE_BIANCHE - TOTALE
+series NONVOTO = ELETTORI - VOTANTI + NULLE + SCHEDE_BIANCHE
+series CDX = FI + FDI + LEGA
+series CSX = PD
+list X = CDX PD M5S LOCALI ALTRI NONVOTO
+smpl REGIONE != "Valle d'Aosta/Valle d'Aoste" --restrict
+
+matrix CT = aggregate(X, REGIONE, sum)
+M = CT[1:19, 3:]
+
+bundle b = ca_matrix(M)
+b.rlabels = strvals(REGIONE)[1:19]
+b.clabels = varnames(X)
+b.rfsize = 8
+ca_printout(&b)
+ca_plot(&b, 2, 3)
+
+

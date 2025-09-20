@@ -1,0 +1,84 @@
+gretl version 2022b
+Current session: 2023-06-17 17:46
+
+? set verbose off
+Read datafile C:\Users\Daniele\Documents\Università DSEI\ANNO 2\Tesi\analisi\analisi descrittiva\elezioni_camera_2022.csv
+-----------------------------------------------------------------
+Rows
+-----------------------------------------------------------------
+                                     Mass    Inertia     Perc.
+DESCRIPTIVE STATS:                  (x100)     (x100)  Inertia
+
+                        Piemonte     7.21     0.1734 (  1.38%)
+                       Lombardia    16.31     1.0423 (  8.29%)
+     Trentino-Alto Adige/Sdtirol     1.76     3.5193 ( 28.01%)
+                          Veneto     8.10     0.7490 (  5.96%)
+           Friuli-Venezia Giulia     2.03     0.0947 (  0.75%)
+                         Liguria     2.60     0.0524 (  0.42%)
+                  Emilia-Romagna     7.23     0.5650 (  4.50%)
+                         Toscana     6.11     0.3519 (  2.80%)
+                          Umbria     1.44     0.0244 (  0.19%)
+                          Marche     2.53     0.0254 (  0.20%)
+                           Lazio     9.45     0.0828 (  0.66%)
+                         Abruzzo     2.23     0.0360 (  0.29%)
+                          Molise     0.53     0.0331 (  0.26%)
+                        Campania     9.80     1.5544 ( 12.37%)
+                          Puglia     6.99     0.5768 (  4.59%)
+                      Basilicata     0.97     0.0443 (  0.35%)
+                        Calabria     3.25     0.3966 (  3.16%)
+                         Sicilia     8.52     3.0640 ( 24.38%)
+                        Sardegna     2.92     0.1798 (  1.43%)
+
+Cos^2 Index:                       Axis 1  Axis 2  Axis 3  Axis 4  Axis 5
+
+                        Piemonte    86.47    6.52    0.41    6.52    0.08
+                       Lombardia    73.79   22.85    2.47    0.71    0.18
+     Trentino-Alto Adige/Sdtirol    54.61   44.88    0.06    0.44    0.00
+                          Veneto    58.03   21.89   18.97    0.06    1.05
+           Friuli-Venezia Giulia    61.79   13.32   10.04   14.82    0.03
+                         Liguria    48.24    0.60   13.31   36.81    1.05
+                  Emilia-Romagna    39.28   25.52   34.44    0.74    0.02
+                         Toscana    53.59    7.76   38.48    0.12    0.05
+                          Umbria    25.14   42.61    0.19   31.20    0.86
+                          Marche    45.82   31.53    1.56   11.98    9.11
+                           Lazio    83.86   12.86    0.28    2.68    0.32
+                         Abruzzo     4.33   55.67   24.07   15.30    0.64
+                          Molise    10.39   84.40    1.94    0.80    2.47
+                        Campania    23.61   74.18    1.42    0.10    0.70
+                          Puglia    12.69   85.08    0.92    1.09    0.22
+                      Basilicata    25.73   71.16    2.78    0.31    0.02
+                        Calabria    35.97   56.98    3.52    1.20    2.33
+                         Sicilia    97.87    1.27    0.20    0.66    0.00
+                        Sardegna     7.48   64.71    0.74   26.23    0.83
+
+-----------------------------------------------------------------
+Columns
+-----------------------------------------------------------------
+                                     Mass    Inertia     Perc.
+DESCRIPTIVE STATS:                  (x100)     (x100)  Inertia
+
+                             CDX    25.44     1.4320 ( 11.40%)
+                             CSX    15.63     1.4373 ( 11.44%)
+                             M5S     9.08     2.1761 ( 17.32%)
+                          LOCALI     0.79     6.0582 ( 48.21%)
+                           ALTRI     7.88     0.4283 (  3.41%)
+                         NONVOTO    41.18     1.0337 (  8.23%)
+
+Cos^2 Index:                       Axis 1  Axis 2  Axis 3  Axis 4  Axis 5
+
+                             CDX    59.06   24.32   14.38    2.21    0.03
+                             CSX    53.14   24.63   21.59    0.41    0.23
+                             M5S    37.59   58.50    1.58    1.99    0.33
+                          LOCALI    71.26   28.71    0.01    0.03    0.00
+                           ALTRI    42.44   37.87    2.58   12.45    4.66
+                         NONVOTO    52.43   42.01    1.44    3.46    0.66
+
+-----------------------------------------------------------------
+Inertia
+-----------------------------------------------------------------
+Total inertia =   0.12565485
+axis  1:     0.0747 ( 59.44%, cum.  59.44%)
+axis  2:     0.0431 ( 34.31%, cum.  93.74%)
+axis  3:     0.0058 (  4.59%, cum.  98.34%)
+axis  4:     0.0017 (  1.36%, cum.  99.70%)
+axis  5:     0.0004 (  0.30%, cum. 100.00%)
