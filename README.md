@@ -5,5 +5,6 @@ ne del 2018 e del 2022.
 
 Scopo: individuare i principali fattori sociali, economici e demografici che hanno portato agli esiti elettorali osservati a livello comunale, inserendo un confronto tra le due elezioni.
 
+Le statistiche descrittive aiutano a comprendere i risultati delle votazioni a consuntivo. Una tecnica utilizzata è l'analisi delle corrispondenza, per visualizzare le vicinanze tra partiti politici e regioni.
 L'analisi inferenziale si ispira al modello teorico Katz & King per dati composizionali aggregati e permette di stimare gli effetti delle variabili (es: reddito, disoccupazione, anzianità, quota di stranieri, ...) nelle votazioni.
 Viene integrata da un’analisi controfattuale basata su simulazioni statistiche, per simulare scenari differenti da quello realmente verificato, al variare dei fattori in gioco.
